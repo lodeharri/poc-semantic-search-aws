@@ -26,14 +26,15 @@ export class NeonDocumentRepository implements DocumentRepository {
 
     try {
       const result = await this.sql`
-        INSERT INTO documents (id, content, embedding, created_at)
+        INSERT INTO documents (id, content, embedding, metadata, created_at)
         VALUES (
           ${id}::uuid,
           ${input.content},
           ${vectorStr}::vector,
+          ${input.metadata ?? null}::jsonb,
           ${createdAt.toISOString()}::timestamp
         )
-        RETURNING id, content, created_at
+        RETURNING id, content, metadata, created_at
       `;
 
       logger.info(
@@ -43,9 +44,9 @@ export class NeonDocumentRepository implements DocumentRepository {
 
       return {
         id: result[0].id,
-        content: input.content,
+        content: result[0].content,
         embedding: input.embedding,
-        metadata: input.metadata,
+        metadata: (result[0].metadata as Record<string, unknown> | null) ?? undefined,
         createdAt,
       };
     } catch (err) {

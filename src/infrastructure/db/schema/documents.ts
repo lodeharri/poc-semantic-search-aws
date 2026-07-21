@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, customType } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, customType, jsonb } from 'drizzle-orm/pg-core';
 
 /**
  * Custom vector type for pgvector(1536) columns.
@@ -21,5 +21,6 @@ export const documents = pgTable('documents', {
   id: uuid('id').primaryKey().defaultRandom(),
   content: text('content').notNull(),
   embedding: vector1536('embedding').notNull(),
+  metadata: jsonb('metadata'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
