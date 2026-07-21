@@ -57,8 +57,7 @@ export const handler = async (event: unknown): Promise<LambdaResponse> => {
     path?: string;
     body?: string;
   };
-  const method =
-    httpEvent.requestContext?.http?.method ?? httpEvent.httpMethod ?? 'GET';
+  const method = httpEvent.requestContext?.http?.method ?? httpEvent.httpMethod ?? 'GET';
   const path = httpEvent.rawPath ?? httpEvent.path ?? '/';
 
   logger.info({ requestId, method, path }, 'request received');
@@ -190,8 +189,6 @@ function handleError(err: unknown, requestId: string): LambdaResponse {
 // Allow direct invocation via `pnpm dev`
 if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(
-    handler({ requestContext: { http: { method: 'GET' } }, rawPath: '/' }).then(
-      console.log,
-    ),
+    handler({ requestContext: { http: { method: 'GET' } }, rawPath: '/' }).then(console.log),
   );
 }

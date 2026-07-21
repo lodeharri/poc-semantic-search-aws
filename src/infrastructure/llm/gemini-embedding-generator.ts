@@ -34,9 +34,7 @@ export class GeminiEmbeddingGenerator implements EmbeddingGenerator {
 
       const embedding = response.embeddings[0].values;
       if (!embedding || embedding.length !== this.outputDimensionality) {
-        throw new Error(
-          `Expected ${this.outputDimensionality} dims, got ${embedding?.length}`,
-        );
+        throw new Error(`Expected ${this.outputDimensionality} dims, got ${embedding?.length}`);
       }
 
       logger.info({ dim: embedding.length }, 'embedding generated');

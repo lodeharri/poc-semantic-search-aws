@@ -11,11 +11,11 @@ Proof-of-concept: semantic search using AWS Lambda + Neon (Postgres) + pgvector 
 | DB              | Neon (serverless Postgres) | Free tier, connection pooling, pgvector   |
 | Vector ext      | pgvector                   | Native vector ops in Postgres             |
 | ORM             | Drizzle ORM                | Lightweight, typed, works with serverless |
-| Embeddings      | gemini-embedding-001      | 1536 dims, configurable output            |
+| Embeddings      | gemini-embedding-001       | 1536 dims, configurable output            |
 | Validation      | Zod                        | Env validation + runtime safety           |
 | Logging         | Pino                       | Structured, production-grade              |
 | Testing         | Vitest                     | Fast, native ESM                          |
-| Package manager | pnpm                       | Fast, strict, workspace support          |
+| Package manager | pnpm                       | Fast, strict, workspace support           |
 
 ## Architecture
 
@@ -95,10 +95,10 @@ Generates a semantic embedding for the given text and stores it in the database.
 }
 ```
 
-| Field     | Type   | Required | Constraints         |
-|-----------|--------|----------|---------------------|
-| content   | string | ✅       | 1-8000 characters   |
-| metadata  | object | ❌       | Optional JSONB data |
+| Field    | Type   | Required | Constraints         |
+| -------- | ------ | -------- | ------------------- |
+| content  | string | ✅       | 1-8000 characters   |
+| metadata | object | ❌       | Optional JSONB data |
 
 **Response (201 Created):**
 
@@ -113,11 +113,11 @@ Generates a semantic embedding for the given text and stores it in the database.
 
 **Error Responses:**
 
-| Status | Code                  | Description                        |
-|--------|-----------------------|------------------------------------|
-| 400    | VALIDATION_ERROR      | Invalid request (empty/long content, malformed JSON) |
-| 502    | EXTERNAL_SERVICE_ERROR| Gemini API or Neon DB error        |
-| 500    | APP_ERROR             | Unexpected internal error          |
+| Status | Code                   | Description                                          |
+| ------ | ---------------------- | ---------------------------------------------------- |
+| 400    | VALIDATION_ERROR       | Invalid request (empty/long content, malformed JSON) |
+| 502    | EXTERNAL_SERVICE_ERROR | Gemini API or Neon DB error                          |
+| 500    | APP_ERROR              | Unexpected internal error                            |
 
 **Example curl:**
 
