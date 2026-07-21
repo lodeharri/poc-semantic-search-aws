@@ -24,12 +24,49 @@ import { AppError, ValidationError } from '../src/domain/errors/app-error.js';
 
 // ===== Composition root — manual dependency injection =====
 // IMPORTANT: generator is shared (singleton) between both use cases
-const generator = new GeminiEmbeddingGenerator();
-const repository = new NeonDocumentRepository();
-const searcher = new NeonDocumentSearcher();
-const createUseCase = new CreateEmbeddingUseCase(generator, repository, logger);
-const searchUseCase = new SearchSimilarUseCase(generator, searcher, logger); // <- reuses generator
-const listUseCase = new ListDocumentsUseCase(repository, logger);
+const defaultGenerator = new GeminiEmbeddingGenerator();
+const defaultRepository = new NeonDocumentRepository();
+const defaultSearcher = new NeonDocumentSearcher();
+
+// Active use cases — can be replaced via setUseCasesForTesting() for unit tests
+let activeCreateUseCase: CreateEmbeddingUseCase = new CreateEmbeddingUseCase(
+  defaultGenerator,
+  defaultRepository,
+  logger,
+);
+let activeSearchUseCase: SearchSimilarUseCase = new SearchSimilarUseCase(
+  defaultGenerator,
+  defaultSearcher,
+  logger,
+);
+let activeListUseCase: ListDocumentsUseCase = new ListDocumentsUseCase(defaultRepository, logger);
+
+/**
+ * Replaces the active use cases with test doubles.
+ * Intended for unit tests only — not thread-safe in concurrent Lambda invocations.
+ */
+export function setUseCasesForTesting(useCases: {
+  create: CreateEmbeddingUseCase;
+  search: SearchSimilarUseCase;
+  list: ListDocumentsUseCase;
+}): void {
+  activeCreateUseCase = useCases.create;
+  activeSearchUseCase = useCases.search;
+  activeListUseCase = useCases.list;
+}
+
+/** Returns the currently active use cases (useful for test assertions). */
+export function getActiveUseCases(): {
+  create: CreateEmbeddingUseCase;
+  search: SearchSimilarUseCase;
+  list: ListDocumentsUseCase;
+} {
+  return {
+    create: activeCreateUseCase,
+    search: activeSearchUseCase,
+    list: activeListUseCase,
+  };
+}
 
 // ===== Request schemas =====
 const EmbeddingRequestSchema = z.object({
@@ -160,7 +197,7 @@ async function handleCreateEmbedding(
     throw new ValidationError('Invalid request body', parsed.error.flatten());
   }
 
-  const document = await createUseCase.execute(parsed.data);
+  const document = await activeCreateUseCase.execute(parsed.data);
 
   return {
     statusCode: 201,
@@ -190,7 +227,7 @@ async function handleSearch(event: { body?: string }, _requestId: string): Promi
   }
 
   const { query, limit, threshold } = parsed.data;
-  const { results, count } = await searchUseCase.execute({ query, limit, threshold });
+  const { results, count } = await activeSearchUseCase.execute({ query, limit, threshold });
 
   return {
     statusCode: 200,
@@ -220,7 +257,7 @@ async function handleListDocuments(
     throw new ValidationError('Invalid query parameters', parsed.error.flatten());
   }
 
-  const documents = await listUseCase.execute({ limit: parsed.data.limit });
+  const documents = await activeListUseCase.execute({ limit: parsed.data.limit });
 
   return {
     statusCode: 200,
