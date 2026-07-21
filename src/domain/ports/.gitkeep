@@ -1,0 +1,2 @@
+// Domain ports — interfaces (inbound and outbound) that define contracts.
+// TODO: add port interfaces here (e.g., EmbeddingPort, VectorStorePort).

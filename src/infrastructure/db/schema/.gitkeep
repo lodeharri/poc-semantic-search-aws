@@ -1,0 +1,2 @@
+// DB schema — Drizzle table definitions for Neon + pgvector.
+// TODO: add table definitions here (e.g., documents, embeddings).

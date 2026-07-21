@@ -1,0 +1,2 @@
+// Domain entities — business objects with no infrastructure dependencies.
+// TODO: add entity definitions here (e.g., Document, EmbeddingResult).

@@ -1,0 +1,2 @@
+// Domain errors — business-level error types (no infrastructure details).
+// TODO: add domain error classes here.
