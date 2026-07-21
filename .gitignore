@@ -1,15 +1,25 @@
 # Local Pi runtime state
 .atl/
 
-# Node
+# Node — covers both backend/dist and frontend/dist
 node_modules/
+**/node_modules/
 dist/
+**/dist/
 coverage/
+**/coverage/
 *.log
+**/*.log
+
+# Env files (never commit secrets)
 .env
 .env.local
 .env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
 !.env.example
+!**/.env.example
 
 # Editor
 .vscode/
@@ -24,6 +34,14 @@ Thumbs.db
 # Build artifacts
 *.tsbuildinfo
 
-# CDK
+# CDK outputs (root + backend)
 cdk.out/
+**/cdk.out/
 cdk.context.json
+**/cdk.context.json
+
+# Frontend Vite cache
+.vite/
+**/.vite/
+
+# Frontend src (covered by backend test configs but explicit here)

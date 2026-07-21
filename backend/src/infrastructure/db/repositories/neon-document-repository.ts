@@ -7,7 +7,10 @@ import type { NeonQueryFunction } from '@neondatabase/serverless';
 import { getNeonClient } from '../client.js';
 import { logger } from '../../logger.js';
 import type { Document, CreateDocumentInput } from '../../../domain/entities/document.js';
-import type { DocumentRepository } from '../../../domain/ports/document-repository.js';
+import type {
+  DocumentRepository,
+  ListRecentInput,
+} from '../../../domain/ports/document-repository.js';
 import { ExternalServiceError } from '../../../domain/errors/app-error.js';
 
 export class NeonDocumentRepository implements DocumentRepository {
@@ -51,6 +54,32 @@ export class NeonDocumentRepository implements DocumentRepository {
       };
     } catch (err) {
       logger.error({ err, id }, 'failed to save document');
+      throw new ExternalServiceError('NeonDatabase', err);
+    }
+  }
+
+  async findRecent(input: ListRecentInput): Promise<Document[]> {
+    const limit = Math.min(Math.max(1, input.limit), 100);
+
+    try {
+      const rows = await this.sql`
+SELECT id, content, metadata, created_at
+FROM documents
+ORDER BY created_at DESC
+LIMIT ${limit}
+      `;
+
+      logger.info({ limit, count: rows.length }, 'documents listed');
+
+      return rows.map((row) => ({
+        id: row.id as string,
+        content: row.content as string,
+        embedding: [], // No embedding returned (payload optimization)
+        metadata: (row.metadata as Record<string, unknown> | null) ?? undefined,
+        createdAt: new Date(row.created_at as string),
+      }));
+    } catch (err) {
+      logger.error({ err }, 'failed to list documents');
       throw new ExternalServiceError('NeonDatabase', err);
     }
   }

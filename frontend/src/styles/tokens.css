@@ -1,0 +1,38 @@
+:root {
+	/* Palette */
+	--bg: #0e1117;
+	--surface: #161b22;
+	--border: #30363d;
+	--text-primary: #e6edf3;
+	--text-secondary: #8b949e;
+	--text-mono: #c9d1d9;
+	--accent-blue: #58a6ff;
+	--accent-warm: #f78166;
+	--accent-success: #3fb950;
+	--accent-error: #f85149;
+
+	/* Typography */
+	--font-display:
+		"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-body: "Inter", system-ui, -apple-system, sans-serif;
+
+	/* Type scale */
+	--fs-xs: 0.75rem;
+	--fs-sm: 0.875rem;
+	--fs-base: 1rem;
+	--fs-md: 1.125rem;
+	--fs-lg: 1.5rem;
+
+	/* Spacing (8px base unit) */
+	--sp-1: 4px;
+	--sp-2: 8px;
+	--sp-3: 12px;
+	--sp-4: 16px;
+	--sp-6: 24px;
+	--sp-8: 32px;
+	--sp-12: 48px;
+
+	/* Radii */
+	--radius-sm: 4px;
+	--radius-md: 6px;
+}

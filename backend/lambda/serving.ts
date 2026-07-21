@@ -19,6 +19,7 @@ import { NeonDocumentRepository } from '../src/infrastructure/db/repositories/ne
 import { NeonDocumentSearcher } from '../src/infrastructure/db/repositories/neon-document-searcher.js';
 import { CreateEmbeddingUseCase } from '../src/application/use-cases/create-embedding.js';
 import { SearchSimilarUseCase } from '../src/application/use-cases/search-similar.js';
+import { ListDocumentsUseCase } from '../src/application/use-cases/list-documents.js';
 import { AppError, ValidationError } from '../src/domain/errors/app-error.js';
 
 // ===== Composition root — manual dependency injection =====
@@ -28,6 +29,7 @@ const repository = new NeonDocumentRepository();
 const searcher = new NeonDocumentSearcher();
 const createUseCase = new CreateEmbeddingUseCase(generator, repository, logger);
 const searchUseCase = new SearchSimilarUseCase(generator, searcher, logger); // <- reuses generator
+const listUseCase = new ListDocumentsUseCase(repository, logger);
 
 // ===== Request schemas =====
 const EmbeddingRequestSchema = z.object({
@@ -41,6 +43,10 @@ const SearchRequestSchema = z.object({
   threshold: z.number().min(0).max(1).optional(),
 });
 
+const ListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+});
+
 // ===== Types =====
 interface LambdaResponse {
   statusCode: number;
@@ -48,15 +54,10 @@ interface LambdaResponse {
   headers?: Record<string, string>;
 }
 
-// PoC: Function URL uses auth NONE, so CORS is open.
-// TODO: Restrict to known origins in production.
-// eslint-disable-next-line @typescript-eslint/naming-convention
-const corsHeaders = {
+// CORS is handled by AWS Lambda Function URL natively (configured in CDK).
+// This only sets functional headers.
+const responseHeaders = {
   'Content-Type': 'application/json',
-  /* PoC: open CORS for auth NONE Function URL */
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
 };
 
 // ===== Router =====
@@ -68,6 +69,7 @@ export const handler = async (event: unknown): Promise<LambdaResponse> => {
     rawPath?: string;
     path?: string;
     body?: string;
+    queryStringParameters?: Record<string, string>;
   };
   const method = httpEvent.requestContext?.http?.method ?? httpEvent.httpMethod ?? 'GET';
   const path = httpEvent.rawPath ?? httpEvent.path ?? '/';
@@ -76,7 +78,7 @@ export const handler = async (event: unknown): Promise<LambdaResponse> => {
 
   // CORS preflight
   if (method === 'OPTIONS') {
-    return { statusCode: 204, body: '', headers: corsHeaders };
+    return { statusCode: 204, body: '', headers: responseHeaders };
   }
 
   try {
@@ -95,9 +97,14 @@ export const handler = async (event: unknown): Promise<LambdaResponse> => {
       return await handleSearch(httpEvent, requestId);
     }
 
+    // GET /documents — list recent documents without embeddings
+    if (method === 'GET' && path === '/documents') {
+      return await handleListDocuments(httpEvent, requestId);
+    }
+
     return {
       statusCode: 404,
-      headers: corsHeaders,
+      headers: responseHeaders,
       body: JSON.stringify({ error: 'Not Found', method, path }),
     };
   } catch (err) {
@@ -115,7 +122,7 @@ async function handleHealthCheck(requestId: string): Promise<LambdaResponse> {
 
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers: responseHeaders,
       body: JSON.stringify({
         message: 'Poc_semantic_search Lambda ready (deployed via CDK)',
         postgres: version[0].version,
@@ -129,7 +136,7 @@ async function handleHealthCheck(requestId: string): Promise<LambdaResponse> {
     logger.error({ err, requestId }, 'health check failed');
     return {
       statusCode: 500,
-      headers: corsHeaders,
+      headers: responseHeaders,
       body: JSON.stringify({ error: 'Health check failed', requestId }),
     };
   }
@@ -157,7 +164,7 @@ async function handleCreateEmbedding(
 
   return {
     statusCode: 201,
-    headers: corsHeaders,
+    headers: responseHeaders,
     body: JSON.stringify({
       id: document.id,
       content: document.content,
@@ -187,7 +194,7 @@ async function handleSearch(event: { body?: string }, _requestId: string): Promi
 
   return {
     statusCode: 200,
-    headers: corsHeaders,
+    headers: responseHeaders,
     body: JSON.stringify({
       query,
       count,
@@ -202,12 +209,40 @@ async function handleSearch(event: { body?: string }, _requestId: string): Promi
   };
 }
 
+async function handleListDocuments(
+  event: { queryStringParameters?: Record<string, string> },
+  _requestId: string,
+): Promise<LambdaResponse> {
+  const queryParams = event.queryStringParameters ?? {};
+  const parsed = ListQuerySchema.safeParse(queryParams);
+
+  if (!parsed.success) {
+    throw new ValidationError('Invalid query parameters', parsed.error.flatten());
+  }
+
+  const documents = await listUseCase.execute({ limit: parsed.data.limit });
+
+  return {
+    statusCode: 200,
+    headers: responseHeaders,
+    body: JSON.stringify({
+      count: documents.length,
+      documents: documents.map((d) => ({
+        id: d.id,
+        content: d.content,
+        metadata: d.metadata,
+        created_at: d.createdAt.toISOString(),
+      })),
+    }),
+  };
+}
+
 function handleError(err: unknown, requestId: string): LambdaResponse {
   if (err instanceof ValidationError) {
     logger.warn({ requestId, err }, 'validation error');
     return {
       statusCode: 400,
-      headers: corsHeaders,
+      headers: responseHeaders,
       body: JSON.stringify({
         error: err.message,
         code: err.code,
@@ -221,7 +256,7 @@ function handleError(err: unknown, requestId: string): LambdaResponse {
     logger.error({ requestId, err }, 'application error');
     return {
       statusCode: 502,
-      headers: corsHeaders,
+      headers: responseHeaders,
       body: JSON.stringify({ error: err.message, code: err.code, requestId }),
     };
   }
@@ -229,7 +264,7 @@ function handleError(err: unknown, requestId: string): LambdaResponse {
   logger.error({ requestId, err }, 'unexpected error');
   return {
     statusCode: 500,
-    headers: corsHeaders,
+    headers: responseHeaders,
     body: JSON.stringify({
       error: 'Internal Server Error',
       requestId,

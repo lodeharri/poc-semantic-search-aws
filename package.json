@@ -1,55 +1,18 @@
 {
-  "name": "poc-semantic-search",
+  "name": "poc-semantic-search-monorepo",
   "private": true,
-  "type": "module",
   "version": "0.0.1",
+  "workspaces": ["backend", "frontend"],
+  "scripts": {
+    "backend:install": "cd backend && pnpm install",
+    "backend:dev": "cd backend && pnpm dev",
+    "backend:deploy": "cd backend && pnpm cdk:deploy --context stackName=PocSemanticSearchStackV2",
+    "frontend:install": "cd frontend && pnpm install",
+    "frontend:dev": "cd frontend && pnpm dev",
+    "frontend:build": "cd frontend && pnpm build"
+  },
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "pnpm@9.15.0",
-  "scripts": {
-    "dev": "tsx watch lambda/serving.ts",
-    "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/lambda.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "type-check": "tsc --noEmit",
-    "lint": "eslint src/ tests/",
-    "format": "prettier --write src/ tests/",
-    "db:generate": "tsx node_modules/drizzle-kit/bin.cjs generate",
-    "db:push": "drizzle-kit push",
-    "test:connection": "tsx --env-file=.env scripts/test-connection.ts",
-    "cdk:synth": "cdk synth",
-    "cdk:bootstrap": "cdk bootstrap aws://216890067629/us-east-1 --profile harrison-cicd",
-    "cdk:deploy": "cdk deploy --profile harrison-cicd --require-approval never",
-    "cdk:diff": "cdk diff --profile harrison-cicd",
-    "cdk:destroy": "cdk destroy --profile harrison-cicd"
-  },
-  "dependencies": {
-    "@google/genai": "^1.0.0",
-    "@neondatabase/serverless": "^0.10.0",
-    "dotenv": "^16.4.0",
-    "drizzle-orm": "^0.38.0",
-    "pino": "^9.6.0",
-    "pino-pretty": "^13.0.0",
-    "zod": "^3.23.0"
-  },
-  "devDependencies": {
-    "@types/aws-lambda": "^8.10.162",
-    "@types/node": "^22.10.0",
-    "@typescript-eslint/eslint-plugin": "^8.19.0",
-    "@typescript-eslint/parser": "^8.19.0",
-    "@vitest/coverage-v8": "^3.0.0",
-    "aws-cdk": "^2.170.0",
-    "aws-cdk-lib": "^2.170.0",
-    "constructs": "^10.4.0",
-    "drizzle-kit": "^0.30.0",
-    "esbuild": "^0.25.0",
-    "eslint": "^9.17.0",
-    "prettier": "^3.4.0",
-    "source-map-support": "^0.5.21",
-    "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
-  }
+  "packageManager": "pnpm@9.15.0"
 }

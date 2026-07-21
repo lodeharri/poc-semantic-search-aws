@@ -1,0 +1,36 @@
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+* {
+	margin: 0;
+	padding: 0;
+}
+html,
+body,
+#root {
+	height: 100%;
+}
+body {
+	font-family: var(--font-body);
+	background: var(--bg);
+	color: var(--text-primary);
+	font-size: var(--fs-base);
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+button {
+	background: none;
+	border: none;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+}
+input,
+textarea {
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: none;
+}

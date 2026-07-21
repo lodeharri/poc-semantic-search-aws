@@ -95,11 +95,21 @@ export class PocSemanticSearchStack extends cdk.Stack {
     databaseSecret.grantRead(migratorFn);
 
     // Function URL for easy testing without API Gateway
+    // NOTE: Lambda Function URL handles OPTIONS preflight automatically when CORS is configured.
+    // The manual OPTIONS handler in serving.ts will NOT be invoked for CORS preflight.
     const servingUrl = servingFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
         allowedOrigins: ['*'],
         allowedMethods: [lambda.HttpMethod.GET, lambda.HttpMethod.POST],
+        allowedHeaders: [
+          'Content-Type',
+          'Authorization',
+          'X-Amz-Date',
+          'X-Amz-Security-Token',
+          'X-Amz-User-Agent',
+        ],
+        maxAge: cdk.Duration.seconds(86400), // cache preflight 24h
       },
     });
 
