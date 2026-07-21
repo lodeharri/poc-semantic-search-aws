@@ -4,6 +4,10 @@
   "version": "0.0.1",
   "workspaces": ["backend", "frontend"],
   "scripts": {
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "type-check": "pnpm -r type-check",
+    "build": "pnpm -r build",
     "backend:install": "cd backend && pnpm install",
     "backend:dev": "cd backend && pnpm dev",
     "backend:deploy": "cd backend && pnpm cdk:deploy --context stackName=PocSemanticSearchStackV2",

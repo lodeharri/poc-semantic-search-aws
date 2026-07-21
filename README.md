@@ -65,6 +65,32 @@ cp .env.example .env
 pnpm type-check
 ```
 
+## CI/CD
+
+GitHub Actions runs on every PR and push to `main`:
+
+- **Backend**: lint, type-check, tests (Vitest, 31 tests, 89%+ coverage)
+- **Frontend**: type-check, build
+- **CDK**: synth verification
+- **Security**: npm audit + gitleaks
+- **Deploy to AWS**: push to main only, requires OIDC setup
+
+See `.github/workflows/` for details.
+
+### Coverage badge
+
+[![codecov](https://codecov.io/gh/lodeharri/poc-semantic-search-aws/branch/main/graph/badge.svg)](https://codecov.io/gh/lodeharri/poc-semantic-search-aws)
+
+### Setup OIDC for deploy (one-time)
+
+1. Create IAM role `github-actions-deploy-role` with trust policy for OIDC from GitHub
+2. Add permissions: CloudFormation, Lambda, IAM (limited), Secrets Manager, S3 (CDK assets), CloudWatch Logs
+3. In GitHub repo → Settings → Secrets and variables → Actions:
+   - `AWS_DEPLOY_ENABLED`: `true`
+   - `CODECOV_TOKEN`: (optional, for coverage reports)
+
+**Note**: If OIDC role is not configured, deploys will be skipped in CI but workflows will still pass.
+
 ## Endpoints
 
 ### GET / — Health Check

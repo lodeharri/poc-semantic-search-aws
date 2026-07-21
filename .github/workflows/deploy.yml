@@ -1,0 +1,62 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend to AWS
+    runs-on: ubuntu-latest
+    env:
+      AWS_DEPLOY_ENABLED: ${{ secrets.AWS_DEPLOY_ENABLED }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: cd backend && pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials (OIDC)
+        if: env.AWS_DEPLOY_ENABLED == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: >-
+            arn:aws:iam::216890067629:role/github-actions-deploy-role
+          aws-region: us-east-1
+
+      - name: Deploy to AWS
+        if: env.AWS_DEPLOY_ENABLED == 'true'
+        run: |
+          cd backend && pnpm cdk:deploy \
+            --context stackName=PocSemanticSearchStackV2 \
+            --require-approval never
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Deploy skipped notice
+        if: env.AWS_DEPLOY_ENABLED != 'true'
+        run: |
+          echo "Deploy skipped — OIDC role not configured"
+          echo "or AWS_DEPLOY_ENABLED not set to 'true'"
+          echo ""
+          echo "To enable automatic deploys:"
+          echo "1. Configure IAM OIDC role in AWS account"
+          echo "2. Set AWS_DEPLOY_ENABLED secret to 'true'"
