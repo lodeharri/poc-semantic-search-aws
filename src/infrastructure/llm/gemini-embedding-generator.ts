@@ -6,7 +6,10 @@ import { GoogleGenAI } from '@google/genai';
 import { env } from '../config/env.js';
 import { logger } from '../logger.js';
 import { ExternalServiceError } from '../../domain/errors/app-error.js';
-import type { EmbeddingGenerator } from '../../domain/ports/embedding-generator.js';
+import type {
+  EmbeddingGenerator,
+  EmbeddingOptions,
+} from '../../domain/ports/embedding-generator.js';
 
 export class GeminiEmbeddingGenerator implements EmbeddingGenerator {
   private readonly client: GoogleGenAI;
@@ -17,13 +20,13 @@ export class GeminiEmbeddingGenerator implements EmbeddingGenerator {
     this.client = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
   }
 
-  async generate(text: string): Promise<number[]> {
+  async generate(text: string, options?: EmbeddingOptions): Promise<number[]> {
     try {
       const response = await this.client.models.embedContent({
         model: this.model,
         contents: text,
         config: {
-          taskType: 'RETRIEVAL_DOCUMENT',
+          taskType: options?.taskType ?? 'RETRIEVAL_DOCUMENT',
           outputDimensionality: this.outputDimensionality,
         },
       });
@@ -37,10 +40,10 @@ export class GeminiEmbeddingGenerator implements EmbeddingGenerator {
         throw new Error(`Expected ${this.outputDimensionality} dims, got ${embedding?.length}`);
       }
 
-      logger.info({ dim: embedding.length }, 'embedding generated');
+      logger.info({ dim: embedding.length, taskType: options?.taskType }, 'embedding generated');
       return embedding;
     } catch (err) {
-      logger.error({ err }, 'failed to generate embedding');
+      logger.error({ err, taskType: options?.taskType }, 'failed to generate embedding');
       throw new ExternalServiceError('Gemini', err);
     }
   }

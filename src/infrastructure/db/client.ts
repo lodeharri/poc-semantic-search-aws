@@ -5,11 +5,12 @@ import { env } from '../config/env.js';
 let _client: NeonQueryFunction<false, false> | null = null;
 
 /**
- * Creates (or returns cached) a Neon serverless query client.
- * Reads DATABASE_URL from the validated env object.
+ * Singleton factory for the Neon serverless HTTP client.
+ * Reusable across multiple adapters (NeonDocumentRepository, NeonDocumentSearcher).
  */
-export function createDbClient(): NeonQueryFunction<false, false> {
-  if (_client) return _client;
-  _client = neon(env.DATABASE_URL);
+export function getNeonClient(): NeonQueryFunction<false, false> {
+  if (!_client) {
+    _client = neon(env.DATABASE_URL);
+  }
   return _client;
 }

@@ -3,8 +3,8 @@
  * Uses @neondatabase/serverless for direct SQL access with pgvector support.
  */
 import { randomUUID } from 'node:crypto';
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
-import { env } from '../../config/env.js';
+import type { NeonQueryFunction } from '@neondatabase/serverless';
+import { getNeonClient } from '../client.js';
 import { logger } from '../../logger.js';
 import type { Document, CreateDocumentInput } from '../../../domain/entities/document.js';
 import type { DocumentRepository } from '../../../domain/ports/document-repository.js';
@@ -14,7 +14,7 @@ export class NeonDocumentRepository implements DocumentRepository {
   private readonly sql: NeonQueryFunction<false, false>;
 
   constructor() {
-    this.sql = neon(env.DATABASE_URL);
+    this.sql = getNeonClient();
   }
 
   async save(input: CreateDocumentInput): Promise<Document> {

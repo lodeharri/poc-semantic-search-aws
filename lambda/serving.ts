@@ -4,6 +4,7 @@
  * Routes:
  *   GET  /                -> health check (verifies DB + pgvector)
  *   POST /embeddings      -> creates document with Gemini embedding
+ *   POST /search          -> semantic search with cosine similarity
  *
  * Hexagonal composition root: dependencies injected manually at module level.
  * This keeps the Lambda cold-start fast while allowing unit testing of adapters.
@@ -15,18 +16,29 @@ import { env } from '../src/infrastructure/config/env.js';
 import { logger } from '../src/infrastructure/logger.js';
 import { GeminiEmbeddingGenerator } from '../src/infrastructure/llm/gemini-embedding-generator.js';
 import { NeonDocumentRepository } from '../src/infrastructure/db/repositories/neon-document-repository.js';
+import { NeonDocumentSearcher } from '../src/infrastructure/db/repositories/neon-document-searcher.js';
 import { CreateEmbeddingUseCase } from '../src/application/use-cases/create-embedding.js';
+import { SearchSimilarUseCase } from '../src/application/use-cases/search-similar.js';
 import { AppError, ValidationError } from '../src/domain/errors/app-error.js';
 
 // ===== Composition root — manual dependency injection =====
+// IMPORTANT: generator is shared (singleton) between both use cases
 const generator = new GeminiEmbeddingGenerator();
 const repository = new NeonDocumentRepository();
-const useCase = new CreateEmbeddingUseCase(generator, repository, logger);
+const searcher = new NeonDocumentSearcher();
+const createUseCase = new CreateEmbeddingUseCase(generator, repository, logger);
+const searchUseCase = new SearchSimilarUseCase(generator, searcher, logger); // <- reuses generator
 
 // ===== Request schemas =====
 const EmbeddingRequestSchema = z.object({
   content: z.string().min(1).max(8000),
   metadata: z.record(z.unknown()).optional(),
+});
+
+const SearchRequestSchema = z.object({
+  query: z.string().min(1).max(8000),
+  limit: z.number().int().min(1).max(100).optional().default(10),
+  threshold: z.number().min(0).max(1).optional(),
 });
 
 // ===== Types =====
@@ -76,6 +88,11 @@ export const handler = async (event: unknown): Promise<LambdaResponse> => {
     // POST /embeddings
     if (method === 'POST' && path === '/embeddings') {
       return await handleCreateEmbedding(httpEvent, requestId);
+    }
+
+    // POST /search — semantic search with cosine similarity
+    if (method === 'POST' && path === '/search') {
+      return await handleSearch(httpEvent, requestId);
     }
 
     return {
@@ -136,7 +153,7 @@ async function handleCreateEmbedding(
     throw new ValidationError('Invalid request body', parsed.error.flatten());
   }
 
-  const document = await useCase.execute(parsed.data);
+  const document = await createUseCase.execute(parsed.data);
 
   return {
     statusCode: 201,
@@ -146,6 +163,41 @@ async function handleCreateEmbedding(
       content: document.content,
       embedding_dim: document.embedding.length,
       created_at: document.createdAt.toISOString(),
+    }),
+  };
+}
+
+async function handleSearch(event: { body?: string }, _requestId: string): Promise<LambdaResponse> {
+  let body: Record<string, unknown> = {};
+  if (event.body) {
+    try {
+      body = JSON.parse(event.body);
+    } catch {
+      throw new ValidationError('Invalid JSON in request body');
+    }
+  }
+  const parsed = SearchRequestSchema.safeParse(body);
+
+  if (!parsed.success) {
+    throw new ValidationError('Invalid request body', parsed.error.flatten());
+  }
+
+  const { query, limit, threshold } = parsed.data;
+  const { results, count } = await searchUseCase.execute({ query, limit, threshold });
+
+  return {
+    statusCode: 200,
+    headers: corsHeaders,
+    body: JSON.stringify({
+      query,
+      count,
+      results: results.map((r) => ({
+        id: r.id,
+        content: r.content,
+        similarity: r.similarity,
+        metadata: r.metadata,
+        created_at: r.createdAt.toISOString(),
+      })),
     }),
   };
 }
