@@ -23,4 +23,5 @@ export const documents = pgTable('documents', {
   embedding: vector1536('embedding').notNull(),
   metadata: jsonb('metadata'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  testField: text('test_field'),
 });
