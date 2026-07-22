@@ -22,36 +22,26 @@ if (envResult.error) {
 }
 
 // ============================================================
-// STEP 2: Validate required env vars BEFORE any CDK synthesis
+// STEP 2: Construct CDK app + stack
 // ============================================================
-const requiredVars = ['DATABASE_URL', 'GEMINI_API_KEY'] as const;
-type RequiredVar = (typeof requiredVars)[number];
-
-const missingVars: RequiredVar[] = [];
-for (const varName of requiredVars) {
-  if (!process.env[varName] || process.env[varName]!.trim().length === 0) {
-    missingVars.push(varName);
-  }
-}
-
-if (missingVars.length > 0) {
-  console.error('\n❌ Missing required environment variables:');
-  for (const v of missingVars) {
-    console.error(`   - ${v}`);
-  }
-  console.error('\n📝 Populate them in your .env file (use .env.example as reference)');
-  console.error('   .env is gitignored and never committed.\n');
-  process.exit(1);
-}
-
-// ============================================================
-// STEP 3: Construct CDK app + stack
+// Secrets are NOT loaded here — the stack reads ARNs from CDK context.
+// Local devs can either pass `--context databaseSecretArn=...` on the CLI,
+// or set DATABASE_SECRET_ARN / GEMINI_SECRET_ARN in their .env (see README).
 // ============================================================
 const app = new cdk.App();
 
 // Allow stack name override via context (useful when the original stack is stuck in DELETE_IN_PROGRESS)
 const stackName =
   (app.node.tryGetContext('stackName') as string | undefined) ?? 'PocSemanticSearchStack';
+
+// Surface ARN context from env vars if set, so local devs can put them in .env
+// without having to type them on every command. CLI --context takes precedence.
+if (process.env.DATABASE_SECRET_ARN && !app.node.tryGetContext('databaseSecretArn')) {
+  app.node.setContext('databaseSecretArn', process.env.DATABASE_SECRET_ARN);
+}
+if (process.env.GEMINI_SECRET_ARN && !app.node.tryGetContext('geminiSecretArn')) {
+  app.node.setContext('geminiSecretArn', process.env.GEMINI_SECRET_ARN);
+}
 
 new PocSemanticSearchStack(app, stackName, {
   env: {

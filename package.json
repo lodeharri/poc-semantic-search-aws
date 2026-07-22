@@ -10,10 +10,13 @@
     "build": "pnpm -r build",
     "backend:install": "cd backend && pnpm install",
     "backend:dev": "cd backend && pnpm dev",
-    "backend:deploy": "cd backend && pnpm cdk:deploy --context stackName=PocSemanticSearchStackV2",
+    "backend:deploy": "cd backend && pnpm cdk:deploy",
     "frontend:install": "cd frontend && pnpm install",
     "frontend:dev": "cd frontend && pnpm dev",
-    "frontend:build": "cd frontend && pnpm build"
+    "frontend:build": "cd frontend && pnpm build",
+    "bootstrap:aws": "bash scripts/bootstrap-aws.sh",
+    "bootstrap:github": "bash scripts/bootstrap-github.sh",
+    "bootstrap:all": "pnpm bootstrap:aws && pnpm bootstrap:github"
   },
   "engines": {
     "node": ">=20"

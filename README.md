@@ -50,46 +50,80 @@ lambda/
 
 ## Setup
 
+### Prerequisites
+
+- Node.js 20+
+- pnpm 9+
+- AWS CLI v2 (configured with `aws configure`)
+- GitHub CLI (`gh`) authenticated with `gh auth login`
+- `jq` (for the bootstrap scripts)
+- An AWS account where you have permission to create IAM roles, OIDC providers, and Secrets Manager entries
+
+### One-time setup (per AWS account + GitHub repo)
+
 ```bash
-# 1. Clone and enter project
-cd poc_semantic_search
+# 1. Populate backend/.env with your values
+cp backend/.env.example backend/.env
+# Edit backend/.env and set DATABASE_URL and GEMINI_API_KEY
 
-# 2. Install dependencies
-pnpm install
+# 2. Run the AWS bootstrap (creates secrets, OIDC provider, and IAM role)
+pnpm bootstrap:aws
 
-# 3. Copy env template and fill in values
-cp .env.example .env
-# Edit .env with your DATABASE_URL (Neon) and GEMINI_API_KEY
+# 3. Run the GitHub bootstrap (sets repository Variables)
+pnpm bootstrap:github
 
-# 4. Verify the project builds
-pnpm type-check
+# 4. Push to main
+git push origin main
 ```
 
-## CI/CD
+That is it. CI runs for every pull request and push to `main`; deployment runs after CI succeeds on `main`.
 
-GitHub Actions runs on every PR and push to `main`:
+After populating `backend/.env`, you can run both bootstrap steps with one command: `pnpm bootstrap:all`.
 
-- **Backend**: lint, type-check, tests (Vitest, 31 tests, 89%+ coverage)
-- **Frontend**: type-check, build
-- **CDK**: synth verification
-- **Security**: npm audit + gitleaks
-- **Deploy to AWS**: push to main only, requires OIDC setup
+### What the bootstrap does
 
-See `.github/workflows/` for details.
+**`pnpm bootstrap:aws`** creates or reconciles, idempotently:
 
-### Coverage badge
+- AWS Secrets Manager entries `poc-semantic-search/database-url` and `poc-semantic-search/gemini-api-key`, using values read from `backend/.env`
+- IAM OIDC Identity Provider for `token.actions.githubusercontent.com`, so GitHub Actions can assume roles without long-lived keys
+- IAM role `github-actions-deploy-role` with `AdministratorAccess` (PoC scope — tighten for production)
+- A trust policy restricted to `repo:<owner>/<repo>:ref:refs/heads/main`, so only this repository on `main` can assume the role
 
-[![codecov](https://codecov.io/gh/lodeharri/poc-semantic-search-aws/branch/main/graph/badge.svg)](https://codecov.io/gh/lodeharri/poc-semantic-search-aws)
+The script writes the resulting `DATABASE_SECRET_ARN` and `GEMINI_SECRET_ARN` values to the gitignored `backend/.env`, allowing the next bootstrap command and local CDK commands to use them automatically. Existing secret values are not changed unless you explicitly run `pnpm bootstrap:aws --confirm-update`.
 
-### Setup OIDC for deploy (one-time)
+**`pnpm bootstrap:github`** sets, idempotently:
 
-1. Create IAM role `github-actions-deploy-role` with trust policy for OIDC from GitHub
-2. Add permissions: CloudFormation, Lambda, IAM (limited), Secrets Manager, S3 (CDK assets), CloudWatch Logs
-3. In GitHub repo → Settings → Secrets and variables → Actions:
-   - `AWS_DEPLOY_ENABLED`: `true`
-   - `CODECOV_TOKEN`: (optional, for coverage reports)
+- Repository Variable `DATABASE_SECRET_ARN`
+- Repository Variable `GEMINI_SECRET_ARN`
 
-**Note**: If OIDC role is not configured, deploys will be skipped in CI but workflows will still pass.
+The ARNs are identifiers, not secret values, so they are stored as GitHub Variables and referenced through `vars.` in workflows.
+
+### How deploy works
+
+1. A pull request or push to `main` triggers CI (`.github/workflows/ci.yml`): lint, type-check, unit tests, CDK synth, and security scans.
+2. After CI succeeds for `main`, the Deploy workflow (`.github/workflows/deploy.yml`):
+   - Checks out the exact commit that passed CI
+   - Assumes the IAM role through OIDC, with no long-lived AWS keys
+   - Runs `cdk deploy --context databaseSecretArn=... --context geminiSecretArn=...`
+   - Lets CloudFormation resolve Secrets Manager dynamic references during deployment, so secret values never appear in the synthesized template or GitHub configuration
+
+### Local development
+
+```bash
+pnpm install
+cp backend/.env.example backend/.env  # edit with your values
+pnpm --filter backend dev              # run Lambda locally with hot reload
+pnpm backend:deploy                    # deploy using ARNs written by bootstrap:aws
+```
+
+To re-run the bootstrap on a fresh account: `pnpm bootstrap:all`.
+
+### Troubleshooting
+
+- **"Missing required context: databaseSecretArn"** when running `cdk:synth` locally → run `pnpm bootstrap:aws`; it writes `DATABASE_SECRET_ARN` and `GEMINI_SECRET_ARN` to `backend/.env`. If that write failed, add the printed ARNs manually.
+- **"Profile harrison-cicd not found"** → your local scripts are out of date; update with `pnpm install` and remove any local `--profile` flags.
+- **Bootstrap script says "AWS credentials not configured"** → run `aws configure` and set the region to `us-east-1`.
+- **CDK deploy fails with "Role ... cannot be assumed"** → re-run `pnpm bootstrap:aws` and verify the role trust policy is restricted to this repository's `main` branch in the IAM console.
 
 ## Endpoints
 
@@ -246,46 +280,42 @@ pnpm build
 
 ## Deploy
 
-The CDK reads automatically from `.env`:
+The CDK stack references secrets that already live in AWS Secrets Manager — secret values are never embedded in the stack or read from `.env` during synthesis.
 
-1. Populate `.env` with your credentials (use `.env.example` as template).
-   - `DATABASE_URL=postgresql://...`
-   - `GEMINI_API_KEY=AIza...`
-2. `pnpm install`
-3. `pnpm cdk:bootstrap` (first time per region)
-4. `pnpm cdk:deploy`
+1. Populate `backend/.env` from `backend/.env.example` for local Lambda runs.
+2. Run `pnpm bootstrap:aws` to reconcile AWS resources and write the secret ARNs to `backend/.env`.
+3. Run `pnpm install`.
+4. Run `pnpm --filter backend cdk:bootstrap` the first time you use CDK in an AWS account and region.
+5. Run `pnpm backend:deploy`.
 
 The stack:
 
-- ✅ Validates env vars exist (fails fast with clear message)
-- ✅ Creates secrets in AWS Secrets Manager
+- ✅ Reads secret ARNs from CDK context (fails fast with clear message if missing)
+- ✅ References pre-existing secrets in AWS Secrets Manager — never creates them
 - ✅ Creates Lambdas (migrator + serving)
 - ✅ Creates CustomResource that runs migrations automatically
 - ✅ Waits for migrations before activating serving Lambda
 
-To update secrets after deployment:
+To update existing secret values after deployment, edit `backend/.env` and confirm the rotation explicitly:
 
 ```bash
-aws secretsmanager update-secret \
-  --secret-id poc-semantic-search/database-url \
-  --secret-string "postgresql://NEW..." \
-  --profile harrison-cicd
+pnpm bootstrap:aws --confirm-update
 ```
 
 ## CDK commands
 
 ```bash
-# Generate CloudFormation template (validates .env first)
-pnpm cdk:synth
+# Generate the CloudFormation template
+pnpm --filter backend cdk:synth
 
 # Deploy the stack
-pnpm cdk:deploy
+pnpm backend:deploy
 
 # Preview changes before deploying
-pnpm cdk:diff
+pnpm --filter backend cdk:diff
 
 # Destroy the stack (careful!)
-pnpm cdk:destroy
+pnpm --filter backend cdk:destroy
 ```
 
 ## Roadmap

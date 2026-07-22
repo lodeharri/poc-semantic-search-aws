@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import { Stack } from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -15,32 +16,35 @@ export class PocSemanticSearchStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Get values from process.env (cargado por bin/poc-semantic-search.ts)
-    const databaseUrl = process.env.DATABASE_URL;
-    const geminiApiKey = process.env.GEMINI_API_KEY;
+    // ===== Secrets =====
+    // Secrets are created OUTSIDE the CDK lifecycle (one-time bootstrap via
+    // `aws secretsmanager create-secret`). CDK only references them by ARN,
+    // so secret VALUES never enter the repo, the CI runner, or the CDK context.
+    const databaseSecretArn = Stack.of(this).node.tryGetContext('databaseSecretArn') as
+      | string
+      | undefined;
+    const geminiSecretArn = Stack.of(this).node.tryGetContext('geminiSecretArn') as
+      | string
+      | undefined;
 
-    if (!databaseUrl || !geminiApiKey) {
-      // bin/poc-semantic-search.ts ya valida esto, pero es defensa en profundidad
+    if (!databaseSecretArn || !geminiSecretArn) {
       throw new Error(
-        'DATABASE_URL and GEMINI_API_KEY must be set. Did you run `pnpm cdk:deploy` (which loads .env)?',
+        'Missing required context: databaseSecretArn and geminiSecretArn. ' +
+          'Pass via --context databaseSecretArn=... --context geminiSecretArn=...',
       );
     }
 
-    // ===== Secrets =====
-    // Las secrets se crean con los valores iniciales desde .env.
-    // En deploys subsiguientes, CloudFormation detecta que la secret ya existe
-    // con un valor diferente y requiere `--no-rollback` o `cdk import` si querés cambiar.
-    const databaseSecret = new secretsmanager.Secret(this, 'DatabaseUrl', {
-      secretName: 'poc-semantic-search/database-url',
-      description: 'Neon Postgres connection string',
-      secretStringValue: cdk.SecretValue.unsafePlainText(databaseUrl),
-    });
+    const databaseSecret = secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      'DatabaseUrl',
+      databaseSecretArn,
+    );
 
-    const geminiSecret = new secretsmanager.Secret(this, 'GeminiApiKey', {
-      secretName: 'poc-semantic-search/gemini-api-key',
-      description: 'Google Gemini API key for embeddings',
-      secretStringValue: cdk.SecretValue.unsafePlainText(geminiApiKey),
-    });
+    const geminiSecret = secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      'GeminiApiKey',
+      geminiSecretArn,
+    );
 
     // ===== Lambda Migrator =====
     const migratorFn = new NodejsFunction(this, 'Migrator', {

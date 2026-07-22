@@ -23,10 +23,10 @@
     "db:push": "drizzle-kit push",
     "test:connection": "tsx --env-file=.env scripts/test-connection.ts",
     "cdk:synth": "cdk synth",
-    "cdk:bootstrap": "cdk bootstrap aws://216890067629/us-east-1 --profile harrison-cicd",
-    "cdk:deploy": "cdk deploy --profile harrison-cicd --require-approval never",
-    "cdk:diff": "cdk diff --profile harrison-cicd",
-    "cdk:destroy": "cdk destroy --profile harrison-cicd"
+    "cdk:bootstrap": "cdk bootstrap aws://216890067629/us-east-1",
+    "cdk:deploy": "cdk deploy --require-approval never --context stackName=${STACK_NAME:-PocSemanticSearchStackV2}",
+    "cdk:diff": "cdk diff",
+    "cdk:destroy": "cdk destroy"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
