@@ -5,9 +5,13 @@
  * 1. Composition root: instantiates adapters and use cases, wires them together
  * 2. Dispatch: looks up the route in the route table and calls the handler
  * 3. Error handling: maps domain errors → HTTP status codes
- * 4. CORS preflight: handles OPTIONS requests
  *
  * What this file does NOT do:
+ * - Handle CORS — the CDK stack configures CORS on the Lambda Function URL,
+ *   which intercepts preflight (OPTIONS) and adds the right headers to all
+ *   responses. We do NOT set CORS headers here to avoid duplication
+ *   (mixing them with the Function URL's would produce invalid headers like
+ *   `*, http://localhost:5173`).
  * - Validate request bodies (the handlers do, with Zod)
  * - Contain any business logic (the use cases do)
  * - Implement any endpoint (the handlers do)
@@ -59,17 +63,10 @@ export function setUseCasesForTesting(overrides: Partial<HandlersBag>): void {
 
 // =============== Dispatch ===============
 
-const CORS_HEADERS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-};
-
 export const handler = async (event: unknown): Promise<{
   statusCode: number;
   body: string;
-  headers?: Record<string, string>;
+  headers?: Record<string, string | number | boolean>;
 }> => {
   const requestId = randomUUID();
   const httpEvent = event as {
@@ -83,17 +80,15 @@ export const handler = async (event: unknown): Promise<{
 
   logger.info({ requestId, method, path }, 'request received');
 
-  // CORS preflight — handled here, not in routes, because it's HTTP-protocol level
-  if (method === 'OPTIONS') {
-    return { statusCode: 204, body: '', headers: CORS_HEADERS };
-  }
+  // CORS is handled by the Lambda Function URL config in the CDK stack.
+  // We do NOT handle OPTIONS here — the Function URL intercepts preflight
+  // and adds CORS headers to every response automatically.
 
   try {
     const route = routes.find((r) => r.method === method && r.path === path);
     if (!route) {
       return {
         statusCode: 404,
-        headers: CORS_HEADERS,
         body: JSON.stringify({ error: 'Not Found', method, path, requestId }),
       };
     }
@@ -107,15 +102,11 @@ export const handler = async (event: unknown): Promise<{
       useCases,
     );
 
-    // Merge CORS headers with the handler's headers (CORS takes precedence)
-    const mergedHeaders: Record<string, string> = {
-      ...(handlerResponse.headers ?? {}),
-      ...CORS_HEADERS,
-    };
-
+    // Return the handler's response as-is. The Lambda Function URL will add
+    // CORS headers on the way out. Do NOT set headers here.
     return {
       statusCode: handlerResponse.statusCode ?? 500,
-      headers: mergedHeaders,
+      headers: handlerResponse.headers,
       body: handlerResponse.body ?? '',
     };
   } catch (err) {
@@ -128,7 +119,6 @@ function handleError(err: unknown, requestId: string) {
     logger.warn({ requestId, err }, 'validation error');
     return {
       statusCode: 400,
-      headers: CORS_HEADERS,
       body: JSON.stringify({
         error: err.message,
         code: err.code,
@@ -142,7 +132,6 @@ function handleError(err: unknown, requestId: string) {
     logger.error({ requestId, err }, 'application error');
     return {
       statusCode: 502,
-      headers: CORS_HEADERS,
       body: JSON.stringify({ error: err.message, code: err.code, requestId }),
     };
   }
@@ -150,7 +139,6 @@ function handleError(err: unknown, requestId: string) {
   logger.error({ requestId, err }, 'unexpected error');
   return {
     statusCode: 500,
-    headers: CORS_HEADERS,
     body: JSON.stringify({
       error: 'Internal Server Error',
       requestId,

@@ -120,10 +120,14 @@ describe('Lambda handler — routing', () => {
     expect(body).toHaveProperty('count');
   });
 
-  it('OPTIONS returns 204 with CORS headers', async () => {
+  it('OPTIONS reaches the handler (Function URL intercepts it in production)', async () => {
+    // In production, Lambda Function URL intercepts OPTIONS preflight before
+    // it reaches our handler — so the handler never sees OPTIONS. This test
+    // documents the handler's behavior when OPTIONS IS passed through (it
+    // falls through to the 404 path because no route matches).
     const event = makeEvent('OPTIONS', '/embeddings');
     const result = await handler(event);
-    expect(result.statusCode).toBe(204);
+    expect(result.statusCode).toBe(404);
   });
 
   it('unknown route returns 404', async () => {
