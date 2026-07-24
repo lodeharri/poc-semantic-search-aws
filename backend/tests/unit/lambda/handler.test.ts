@@ -135,6 +135,26 @@ describe('Lambda handler — routing', () => {
     const result = await handler(event);
     expect(result.statusCode).toBe(404);
   });
+
+  it('echoes the X-Correlation-Id header in the 404 response', async () => {
+    const event = {
+      ...makeEvent('GET', '/nope'),
+      headers: { 'x-correlation-id': 'my-trace-abc-123' },
+    };
+    const result = await handler(event);
+    expect(result.statusCode).toBe(404);
+    const body = JSON.parse(result.body);
+    expect(body.correlationId).toBe('my-trace-abc-123');
+    expect(body.requestId).toBeDefined();
+  });
+
+  it('generates a correlation ID when X-Correlation-Id is not provided', async () => {
+    const event = makeEvent('GET', '/nope');
+    const result = await handler(event);
+    const body = JSON.parse(result.body);
+    // RFC 4122 UUID v4 — 36 chars including hyphens
+    expect(body.correlationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
 });
 
 describe('Lambda handler — error handling', () => {
